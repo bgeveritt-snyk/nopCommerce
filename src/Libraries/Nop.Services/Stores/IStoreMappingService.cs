@@ -15,7 +15,7 @@ namespace Nop.Services.Stores
         /// Get an expression predicate to apply a store mapping
         /// </summary>
         /// <param name="storeId">Store identifier</param>
-        /// <typeparam name="TEntity">Type of entity witch supported store mapping</typeparam>
+        /// <typeparam name="TEntity">Type of entity with supported store mapping</typeparam>
         /// <returns>Lambda expression</returns>
         Expression<Func<TEntity, bool>> ApplyStoreMapping<TEntity>(int storeId) where TEntity : BaseEntity, IStoreMappingSupported;
 
