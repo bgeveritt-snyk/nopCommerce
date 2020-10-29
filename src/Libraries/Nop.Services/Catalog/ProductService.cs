@@ -1341,45 +1341,23 @@ namespace Nop.Services.Catalog
                     AddStockQuantityHistoryEntry(product, quantityToChange, product.StockQuantity, product.WarehouseId, message);
                 }
 
-                //qty is reduced. check if minimum stock quantity is reached
-                if (quantityToChange < 0 && product.MinStockQuantity >= GetTotalStockQuantity(product))
+                var stockDec = product.MinStockQuantity >= GetTotalStockQuantity(product);
+                var stockInc = _catalogSettings.PublishBackProductWhenCancellingOrders
+                        && product.MinStockQuantity < GetTotalStockQuantity(product);
+
+                switch (product.LowStockActivity)
                 {
-                    //what should we do now? disable buy button, unpublish the product, or do nothing? check "Low stock activity" property
-                    switch (product.LowStockActivity)
-                    {
-                        case LowStockActivity.DisableBuyButton:
-                            product.DisableBuyButton = true;
-                            product.DisableWishlistButton = true;
-                            UpdateProduct(product);
-                            break;
-                        case LowStockActivity.Unpublish:
-                            product.Published = false;
-                            UpdateProduct(product);
-                            break;
-                        default:
-                            break;
-                    }
-                }
-                //qty is increased. product is back in stock (minimum stock quantity is reached again)?
-                if (_catalogSettings.PublishBackProductWhenCancellingOrders)
-                {
-                    if (quantityToChange > 0 && prevStockQuantity <= product.MinStockQuantity && product.MinStockQuantity < GetTotalStockQuantity(product))
-                    {
-                        switch (product.LowStockActivity)
-                        {
-                            case LowStockActivity.DisableBuyButton:
-                                product.DisableBuyButton = false;
-                                product.DisableWishlistButton = false;
-                                UpdateProduct(product);
-                                break;
-                            case LowStockActivity.Unpublish:
-                                product.Published = true;
-                                UpdateProduct(product);
-                                break;
-                            default:
-                                break;
-                        }
-                    }
+                    case LowStockActivity.DisableBuyButton:
+                        product.DisableBuyButton = stockDec && !stockInc;
+                        product.DisableWishlistButton = stockDec && !stockInc;
+                        UpdateProduct(product);
+                        break;
+                    case LowStockActivity.Unpublish:
+                        product.Published = !stockDec && stockInc;
+                        UpdateProduct(product);
+                        break;
+                    default:
+                        break;
                 }
 
                 //send email notification
@@ -1395,9 +1373,6 @@ namespace Nop.Services.Catalog
                 var combination = _productAttributeParser.FindProductAttributeCombination(product, attributesXml);
                 if (combination != null)
                 {
-                    var prevTotalStockByAllCombinations = _productAttributeService
-                        .GetAllProductAttributeCombinations(product.Id).Sum(c => c.StockQuantity);
-
                     combination.StockQuantity += quantityToChange;
                     _productAttributeService.UpdateProductAttributeCombination(combination);
 
@@ -1409,46 +1384,23 @@ namespace Nop.Services.Catalog
                         var totalStockByAllCombinations = _productAttributeService
                             .GetAllProductAttributeCombinations(product.Id).Sum(c => c.StockQuantity);
 
-                        //qty is reduced. check if minimum stock quantity is reached
-                        if (quantityToChange < 0 && product.MinStockQuantity >= totalStockByAllCombinations)
-                        {
-                            switch (product.LowStockActivity)
-                            {
-                                case LowStockActivity.DisableBuyButton:
-                                    product.DisableBuyButton = true;
-                                    product.DisableWishlistButton = true;
-                                    UpdateProduct(product);
-                                    break;
-                                case LowStockActivity.Unpublish:
-                                    product.Published = false;
-                                    UpdateProduct(product);
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
+                        var stockDec = product.MinStockQuantity >= totalStockByAllCombinations;
+                        var stockInc = _catalogSettings.PublishBackProductWhenCancellingOrders
+                            && product.MinStockQuantity < totalStockByAllCombinations;
 
-                        //qty is increased. product is back in stock (minimum stock quantity is reached again)?
-                        if (_catalogSettings.PublishBackProductWhenCancellingOrders)
+                        switch (product.LowStockActivity)
                         {
-                            if (quantityToChange > 0 && prevTotalStockByAllCombinations <= product.MinStockQuantity && product.MinStockQuantity < totalStockByAllCombinations)
-                            {
-
-                                switch (product.LowStockActivity)
-                                {
-                                    case LowStockActivity.DisableBuyButton:
-                                        product.DisableBuyButton = false;
-                                        product.DisableWishlistButton = false;
-                                        UpdateProduct(product);
-                                        break;
-                                    case LowStockActivity.Unpublish:
-                                        product.Published = true;
-                                        UpdateProduct(product);
-                                        break;
-                                    default:
-                                        break;
-                                }
-                            }
+                            case LowStockActivity.DisableBuyButton:
+                                product.DisableBuyButton = stockDec && !stockInc;
+                                product.DisableWishlistButton = stockDec && !stockInc;
+                                UpdateProduct(product);
+                                break;
+                            case LowStockActivity.Unpublish:
+                                product.Published = !stockDec && stockInc;
+                                UpdateProduct(product);
+                                break;
+                            default:
+                                break;
                         }
                     }
 
