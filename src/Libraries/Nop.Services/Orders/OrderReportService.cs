@@ -595,14 +595,12 @@ namespace Nop.Services.Orders
                               p.ProductTypeId == simpleProductTypeId &&
                               !p.Deleted &&
                               (vendorId == 0 || p.VendorId == vendorId) &&
-                              //(categoryId == 0 || p.ProductCategories.Count(pc => pc.CategoryId == categoryId) > 0) &&
-                              //(manufacturerId == 0 || p.ProductManufacturers.Count(pm => pm.ManufacturerId == manufacturerId) > 0) &&
                               (manufacturerId == 0 || pm.ManufacturerId == manufacturerId) &&
                               (categoryId == 0 || pc.CategoryId == categoryId) &&
                               (showHidden || p.Published)
                         select p;
 
-            if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Product>(storeId))
+            if (!showHidden && !_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Product>(storeId))
             {
                 query = query.Where(_storeMappingService.ApplyStoreMapping<Product>(storeId));
             }

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
@@ -11,6 +12,15 @@ namespace Nop.Services.Catalog
     /// </summary>
     public partial interface IManufacturerService
     {
+        /// <summary>
+        /// Apply constraints to display on the frontend if these exist and enabled.
+        /// </summary>
+        /// <param name="storeId">A store identifier</param>
+        /// <param name="customerRoleIds">Identifiers of customer's roles</param>
+        /// <param name="productsQuery">A query to apply</param>
+        /// <returns>True if any a mapping rule is applied; otherwise false</returns>
+        bool ApplyManufacturerConstraints(int storeId, int[] customerRoleIds, out IQueryable<Manufacturer> manufacturersQuery);
+
         /// <summary>
         /// Clean up manufacturer references for a specified discount
         /// </summary>

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Nop.Core;
 using Nop.Core.Domain.Catalog;
 using Nop.Core.Domain.Customers;
@@ -15,6 +16,15 @@ namespace Nop.Services.Catalog
     public partial interface IProductService
     {
         #region Products
+
+        /// <summary>
+        /// Apply constraints to display on the frontend if these exist and enabled.
+        /// </summary>
+        /// <param name="storeId">A store identifier</param>
+        /// <param name="customerRoleIds">Identifiers of customer's roles</param>
+        /// <param name="productsQuery">A query to apply</param>
+        /// <returns>True if any a mapping rule is applied; otherwise false</returns>
+        bool ApplyProductConstraints(int storeId, int[] customerRoleIds, out IQueryable<Product> productsQuery);
 
         /// <summary>
         /// Delete a product
@@ -33,7 +43,7 @@ namespace Nop.Services.Catalog
         /// </summary>
         /// <returns>Products</returns>
         IList<Product> GetAllProductsDisplayedOnHomepage();
-        
+
         /// <summary>
         /// Gets featured products by a category identifier
         /// </summary>

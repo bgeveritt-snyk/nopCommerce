@@ -76,6 +76,10 @@ namespace Nop.Services.Polls
                 query = query.Where(poll => poll.Published);
                 query = query.Where(poll => !poll.StartDateUtc.HasValue || poll.StartDateUtc <= utcNow);
                 query = query.Where(poll => !poll.EndDateUtc.HasValue || poll.EndDateUtc >= utcNow);
+                
+                //filter by store
+                if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Poll>(storeId))
+                    query = query.Where(_storeMappingService.ApplyStoreMapping<Poll>(storeId));
             }
 
             //load homepage polls only
@@ -89,12 +93,6 @@ namespace Nop.Services.Polls
             //filter by system keyword
             if (!string.IsNullOrEmpty(systemKeyword))
                 query = query.Where(poll => poll.SystemKeyword == systemKeyword);
-
-            //filter by store
-            if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Poll>(storeId))
-            {
-                query = query.Where(_storeMappingService.ApplyStoreMapping<Poll>(storeId));
-            }
 
             //order records by display order
             query = query.OrderBy(poll => poll.DisplayOrder).ThenBy(poll => poll.Id);

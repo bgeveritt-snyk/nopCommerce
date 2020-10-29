@@ -201,11 +201,6 @@ namespace Nop.Services.Catalog
         public static CacheKey ProductsHomepageCacheKey => new CacheKey("Nop.product.homepage.");
 
         /// <summary>
-        /// Gets a key for caching
-        /// </summary>
-        public static CacheKey ProductsMarkedAsNewCacheKey => new CacheKey("Nop.product.markedasnew.");
-
-        /// <summary>
         /// Key for caching identifiers of category featured products
         /// </summary>
         /// <remarks>

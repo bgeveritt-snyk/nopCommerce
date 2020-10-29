@@ -105,7 +105,8 @@ namespace Nop.Services.News
                     query = query.Where(n => !n.EndDateUtc.HasValue || n.EndDateUtc >= utcNow);
                 }
 
-                //Store mapping
+                //Store mapping 
+                //TODO: Are we need apply store mapping when showHidden is false?
                 if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<NewsItem>(storeId))
                 {
                     query = query.Where(_storeMappingService.ApplyStoreMapping<NewsItem>(storeId));

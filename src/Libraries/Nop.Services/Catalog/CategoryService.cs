@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using Nop.Core;
 using Nop.Core.Caching;
@@ -27,7 +28,6 @@ namespace Nop.Services.Catalog
         private readonly IAclService _aclService;
         private readonly ICustomerService _customerService;
         private readonly ILocalizationService _localizationService;
-        private readonly IRepository<AclRecord> _aclRepository;
         private readonly IRepository<Category> _categoryRepository;
         private readonly IRepository<DiscountCategoryMapping> _discountCategoryMappingRepository;
         private readonly IRepository<Product> _productRepository;
@@ -45,7 +45,6 @@ namespace Nop.Services.Catalog
             IAclService aclService,
             ICustomerService customerService,
             ILocalizationService localizationService,
-            IRepository<AclRecord> aclRepository,
             IRepository<Category> categoryRepository,
             IRepository<DiscountCategoryMapping> discountCategoryMappingRepository,
             IRepository<Product> productRepository,
@@ -59,7 +58,6 @@ namespace Nop.Services.Catalog
             _aclService = aclService;
             _customerService = customerService;
             _localizationService = localizationService;
-            _aclRepository = aclRepository;
             _categoryRepository = categoryRepository;
             _discountCategoryMappingRepository = discountCategoryMappingRepository;
             _productRepository = productRepository;
@@ -75,6 +73,33 @@ namespace Nop.Services.Catalog
         #region Methods
 
         /// <summary>
+        /// Apply constraints to display on the frontend if these exist and enabled.
+        /// </summary>
+        /// <param name="storeId">A store identifier</param>
+        /// <param name="customerRoleIds">Identifiers of customer's roles</param>
+        /// <param name="productsQuery">A query to apply</param>
+        /// <returns>True if any a mapping rule is applied; otherwise false</returns>
+        public bool ApplyCategoryConstraints(int storeId, int[] customerRoleIds, out IQueryable<Category> categoriesQuery)
+        {
+            var constraintsFlag = false;
+            categoriesQuery = _categoryRepository.Table.Where(c => c.Published);
+
+            if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Category>(storeId))
+            {
+                categoriesQuery = categoriesQuery.Where(_storeMappingService.ApplyStoreMapping<Category>(storeId));
+                constraintsFlag = true;
+            }
+
+            if (!_catalogSettings.IgnoreAcl && _aclService.IsEntityAclMappingExist<Category>(customerRoleIds))
+            {
+                categoriesQuery = categoriesQuery.Where(_aclService.ApplyAcl<Category>(customerRoleIds));
+                constraintsFlag = true;
+            }
+
+            return constraintsFlag;
+        }
+
+        /// <summary>
         /// Clean up category references for a  specified discount
         /// </summary>
         /// <param name="discount">Discount</param>
@@ -84,7 +109,7 @@ namespace Nop.Services.Catalog
                 throw new ArgumentNullException(nameof(discount));
 
             var mappings = _discountCategoryMappingRepository.Table.Where(dcm => dcm.DiscountId == discount.Id);
-            
+
             _discountCategoryMappingRepository.Delete(mappings.ToList());
         }
 
@@ -158,40 +183,17 @@ namespace Nop.Services.Catalog
             var unsortedCategories = _categoryRepository.GetAll(query =>
             {
                 if (!showHidden)
-                    query = query.Where(c => c.Published);
+                {
+                    var customerRolesIds = _customerService.GetCustomerRoleIds(_workContext.CurrentCustomer);
+                    ApplyCategoryConstraints(storeId, customerRolesIds, out query);
+                }
+
                 if (!string.IsNullOrWhiteSpace(categoryName))
                     query = query.Where(c => c.Name.Contains(categoryName));
                 query = query.Where(c => !c.Deleted);
 
                 if (overridePublished.HasValue)
                     query = query.Where(c => c.Published == overridePublished.Value);
-
-                if ((storeId > 0 && !_catalogSettings.IgnoreStoreLimitations) ||
-                    (!showHidden && !_catalogSettings.IgnoreAcl))
-                {
-                    if (!showHidden && !_catalogSettings.IgnoreAcl)
-                    {
-                        //ACL (access control list)
-                        var allowedCustomerRolesIds = _customerService.GetCustomerRoleIds(_workContext.CurrentCustomer);
-                        query = from c in query
-                            join acl in _aclRepository.Table
-                                on new {c1 = c.Id, c2 = nameof(Category)} equals new
-                                {
-                                    c1 = acl.EntityId, c2 = acl.EntityName
-                                } into c_acl
-                            from acl in c_acl.DefaultIfEmpty()
-                            where !c.SubjectToAcl || allowedCustomerRolesIds.Contains(acl.CustomerRoleId)
-                            select c;
-
-                        query = query.Distinct();
-                    }
-
-                    //Store mapping
-                    if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Category>(storeId))
-                    {
-                        query = query.Where(_storeMappingService.ApplyStoreMapping<Category>(storeId));
-                    }
-                }
 
                 return query.OrderBy(c => c.ParentCategoryId).ThenBy(c => c.DisplayOrder).ThenBy(c => c.Id);
             });
@@ -215,37 +217,16 @@ namespace Nop.Services.Catalog
             var categories = _categoryRepository.GetAll(query =>
             {
                 if (!showHidden)
-                    query = query.Where(c => c.Published);
-
-                query = query.Where(c => c.ParentCategoryId == parentCategoryId);
-                query = query.Where(c => !c.Deleted);
-
-                if (!showHidden && (!_catalogSettings.IgnoreAcl || !_catalogSettings.IgnoreStoreLimitations))
                 {
-                    if (!_catalogSettings.IgnoreAcl)
-                    {
-                        //ACL (access control list)
-                        var allowedCustomerRolesIds = _customerService.GetCustomerRoleIds(_workContext.CurrentCustomer);
-                        query = from c in query
-                            join acl in _aclRepository.Table
-                                on new {c1 = c.Id, c2 = nameof(Category)}
-                                equals new {c1 = acl.EntityId, c2 = acl.EntityName}
-                                into c_acl
-                            from acl in c_acl.DefaultIfEmpty()
-                            where !c.SubjectToAcl || allowedCustomerRolesIds.Contains(acl.CustomerRoleId)
-                            select c;
-
-                        query = query.Distinct();
-                    }
-
+                    //ACL (access control list)
+                    var customerRolesIds = _customerService.GetCustomerRoleIds(_workContext.CurrentCustomer);
                     //Store mapping
                     var storeId = _storeContext.CurrentStore.Id;
 
-                    if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Category>(storeId))
-                    {
-                        query = query.Where(_storeMappingService.ApplyStoreMapping<Category>(storeId));
-                    }
+                    ApplyCategoryConstraints(storeId, customerRolesIds, out query);
                 }
+
+                query = query.Where(c => !c.Deleted && c.ParentCategoryId == parentCategoryId);
 
                 return query.OrderBy(c => c.DisplayOrder).ThenBy(c => c.Id);
             }, cache => cache.PrepareKeyForDefaultCache(NopCatalogDefaults.CategoriesByParentCategoryCacheKey,
@@ -260,15 +241,15 @@ namespace Nop.Services.Catalog
         /// <param name="showHidden">A value indicating whether to show hidden records</param>
         /// <returns>Categories</returns>
         public virtual IList<Category> GetAllCategoriesDisplayedOnHomepage(bool showHidden = false)
-        { 
+        {
             var categories = _categoryRepository.GetAll(query =>
             {
                 return from c in query
-                    orderby c.DisplayOrder, c.Id
-                    where c.Published &&
-                          !c.Deleted &&
-                          c.ShowOnHomepage
-                    select c;
+                       orderby c.DisplayOrder, c.Id
+                       where c.Published &&
+                             !c.Deleted &&
+                             c.ShowOnHomepage
+                       select c;
             }, cache => cache.PrepareKeyForDefaultCache(NopCatalogDefaults.CategoriesHomepageCacheKey));
 
             if (showHidden)
@@ -475,52 +456,19 @@ namespace Nop.Services.Catalog
 
             var query = from pc in _productCategoryRepository.Table
                         join p in _productRepository.Table on pc.ProductId equals p.Id
-                        where pc.CategoryId == categoryId &&
-                              !p.Deleted &&
-                              (showHidden || p.Published)
+                        where pc.CategoryId == categoryId && !p.Deleted
                         orderby pc.DisplayOrder, pc.Id
                         select pc;
 
-            if (!showHidden && (!_catalogSettings.IgnoreAcl || !_catalogSettings.IgnoreStoreLimitations))
+            var storeId = _storeContext.CurrentStore.Id;
+            var customerRolesIds = _customerService.GetCustomerRoleIds(_workContext.CurrentCustomer);
+
+            if (!showHidden && ApplyCategoryConstraints(storeId, customerRolesIds, out var categoriesQuery))
             {
-                if (!_catalogSettings.IgnoreAcl)
-                {
-                    //ACL (access control list)
-                    var allowedCustomerRolesIds = _customerService.GetCustomerRoleIds(_workContext.CurrentCustomer);
-                    query = from pc in query
-                            join c in _categoryRepository.Table on pc.CategoryId equals c.Id
-                            join acl in _aclRepository.Table
-                                on new
-                                {
-                                    c1 = c.Id,
-                                    c2 = nameof(Category)
-                                }
-                                equals new
-                                {
-                                    c1 = acl.EntityId,
-                                    c2 = acl.EntityName
-                                }
-                                into c_acl
-                            from acl in c_acl.DefaultIfEmpty()
-                            where !c.SubjectToAcl || allowedCustomerRolesIds.Contains(acl.CustomerRoleId)
-                            select pc;
-                }
-
-                //Store mapping
-                var storeId = _storeContext.CurrentStore.Id;
-
-                if (!_catalogSettings.IgnoreStoreLimitations && _storeMappingService.IsEntityMappingExists<Category>(storeId))
-                {
-                    var storeMappedQuery = _categoryRepository.Table.Where(_storeMappingService.ApplyStoreMapping<Category>(storeId));
-                    query = query.Where(pc => storeMappedQuery.Any(sm => pc.CategoryId == sm.Id));
-                }
-
-                query = query.Distinct();
+                query = query.Where(pc => categoriesQuery.Any(c => c.Id == pc.CategoryId));
             }
 
-            var productCategories = new PagedList<ProductCategory>(query, pageIndex, pageSize);
-
-            return productCategories;
+            return new PagedList<ProductCategory>(query, pageIndex, pageSize);
         }
 
         /// <summary>
