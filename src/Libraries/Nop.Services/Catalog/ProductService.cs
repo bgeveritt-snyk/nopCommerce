@@ -139,6 +139,33 @@ namespace Nop.Services.Catalog
         #region Utilities
 
         /// <summary>
+        /// Applies the low stock activity to specified product by the total stock quantity
+        /// </summary>
+        /// <param name="product">Product</param>
+        /// <param name="totalStock">Total stock</param>
+        protected virtual void ApplyLowStockActivity(Product product, int totalStock)
+        {
+            var stockDec = product.MinStockQuantity >= totalStock;
+            var stockInc = _catalogSettings.PublishBackProductWhenCancellingOrders
+                    && product.MinStockQuantity < totalStock;
+
+            switch (product.LowStockActivity)
+            {
+                case LowStockActivity.DisableBuyButton:
+                    product.DisableBuyButton = stockDec && !stockInc;
+                    product.DisableWishlistButton = stockDec && !stockInc;
+                    UpdateProduct(product);
+                    break;
+                case LowStockActivity.Unpublish:
+                    product.Published = !stockDec && stockInc;
+                    UpdateProduct(product);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Gets SKU, Manufacturer part number and GTIN
         /// </summary>
         /// <param name="product">Product</param>
@@ -1318,9 +1345,6 @@ namespace Nop.Services.Catalog
 
             if (product.ManageInventoryMethod == ManageInventoryMethod.ManageStock)
             {
-                //previous stock
-                var prevStockQuantity = GetTotalStockQuantity(product);
-
                 //update stock quantity
                 if (product.UseMultipleWarehouses)
                 {
@@ -1341,27 +1365,12 @@ namespace Nop.Services.Catalog
                     AddStockQuantityHistoryEntry(product, quantityToChange, product.StockQuantity, product.WarehouseId, message);
                 }
 
-                var stockDec = product.MinStockQuantity >= GetTotalStockQuantity(product);
-                var stockInc = _catalogSettings.PublishBackProductWhenCancellingOrders
-                        && product.MinStockQuantity < GetTotalStockQuantity(product);
+                var totalStock = GetTotalStockQuantity(product);
 
-                switch (product.LowStockActivity)
-                {
-                    case LowStockActivity.DisableBuyButton:
-                        product.DisableBuyButton = stockDec && !stockInc;
-                        product.DisableWishlistButton = stockDec && !stockInc;
-                        UpdateProduct(product);
-                        break;
-                    case LowStockActivity.Unpublish:
-                        product.Published = !stockDec && stockInc;
-                        UpdateProduct(product);
-                        break;
-                    default:
-                        break;
-                }
+                ApplyLowStockActivity(product, totalStock);
 
                 //send email notification
-                if (quantityToChange < 0 && GetTotalStockQuantity(product) < product.NotifyAdminForQuantityBelow)
+                if (quantityToChange < 0 && totalStock < product.NotifyAdminForQuantityBelow)
                 {
                     var workflowMessageService = EngineContext.Current.Resolve<IWorkflowMessageService>();
                     workflowMessageService.SendQuantityBelowStoreOwnerNotification(product, _localizationSettings.DefaultAdminLanguageId);
@@ -1384,24 +1393,7 @@ namespace Nop.Services.Catalog
                         var totalStockByAllCombinations = _productAttributeService
                             .GetAllProductAttributeCombinations(product.Id).Sum(c => c.StockQuantity);
 
-                        var stockDec = product.MinStockQuantity >= totalStockByAllCombinations;
-                        var stockInc = _catalogSettings.PublishBackProductWhenCancellingOrders
-                            && product.MinStockQuantity < totalStockByAllCombinations;
-
-                        switch (product.LowStockActivity)
-                        {
-                            case LowStockActivity.DisableBuyButton:
-                                product.DisableBuyButton = stockDec && !stockInc;
-                                product.DisableWishlistButton = stockDec && !stockInc;
-                                UpdateProduct(product);
-                                break;
-                            case LowStockActivity.Unpublish:
-                                product.Published = !stockDec && stockInc;
-                                UpdateProduct(product);
-                                break;
-                            default:
-                                break;
-                        }
+                        ApplyLowStockActivity(product, totalStockByAllCombinations);
                     }
 
                     //send email notification
