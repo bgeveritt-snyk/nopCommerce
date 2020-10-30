@@ -5,12 +5,9 @@ using LinqToDB;
 using Nop.Core;
 using Nop.Core.Caching;
 using Nop.Core.Domain.Catalog;
-using Nop.Core.Domain.Security;
 using Nop.Data;
 using Nop.Services.Customers;
-using Nop.Services.Security;
 using Nop.Services.Seo;
-using Nop.Services.Stores;
 
 namespace Nop.Services.Catalog
 {
@@ -21,15 +18,11 @@ namespace Nop.Services.Catalog
     {
         #region Fields
 
-        private readonly CatalogSettings _catalogSettings;
-        private readonly IAclService _aclService;
         private readonly ICustomerService _customerService;
         private readonly IProductService _productService;
         private readonly IRepository<ProductProductTagMapping> _productProductTagMappingRepository;
         private readonly IRepository<ProductTag> _productTagRepository;
         private readonly IStaticCacheManager _staticCacheManager;
-        private readonly IStoreMappingService _storeMappingService;
-        private readonly IStoreService _storeService;
         private readonly IUrlRecordService _urlRecordService;
         private readonly IWorkContext _workContext;
 
@@ -37,27 +30,19 @@ namespace Nop.Services.Catalog
 
         #region Ctor
 
-        public ProductTagService(CatalogSettings catalogSettings,
-            IAclService aclService,
-            ICustomerService customerService,
+        public ProductTagService(ICustomerService customerService,
             IProductService productService,
             IRepository<ProductProductTagMapping> productProductTagMappingRepository,
             IRepository<ProductTag> productTagRepository,
             IStaticCacheManager staticCacheManager,
-            IStoreMappingService storeMappingService,
-            IStoreService storeService,
             IUrlRecordService urlRecordService,
             IWorkContext workContext)
         {
-            _catalogSettings = catalogSettings;
-            _aclService = aclService;
             _customerService = customerService;
             _productService = productService;
             _productProductTagMappingRepository = productProductTagMappingRepository;
             _productTagRepository = productTagRepository;
             _staticCacheManager = staticCacheManager;
-            _storeMappingService = storeMappingService;
-            _storeService = storeService;
             _urlRecordService = urlRecordService;
             _workContext = workContext;
         }
